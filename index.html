@@ -26,6 +26,10 @@ button.g{background:var(--ok)}button.r{background:var(--bad)}button.w{background
 .big{width:100%;padding:14px;font-size:16px}
 .empty{text-align:center;color:var(--mu);padding:30px}
 #st{font-size:11px}
+.mod{position:fixed;inset:0;background:#000a;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.mod>div{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
+canvas{width:100%;height:140px;border:1px dashed var(--mu);border-radius:8px;background:#fff;touch-action:none}
+.th{display:flex;gap:8px;margin-top:8px}.th img{height:70px;border-radius:6px;border:1px solid var(--bd);background:#fff}
 </style></head><body>
 <header><h1>🏭 Factory Visitor Log</h1><small><span id="st"></span> · <span id="cnt"></span></small>
 <nav><button data-t="in" class="on">Inside</button><button data-t="all">All</button><button data-t="add">+ New</button></nav></header>
@@ -39,7 +43,7 @@ const fmt=d=>d?new Date(d).toLocaleString([], {dateStyle:'medium',timeStyle:'sho
 const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const dur=v=>{const e=new Date(v.exit||Date.now())-new Date(v.entry),m=Math.round(e/60000);return m<60?m+' min':Math.floor(m/60)+' h '+m%60+' min'};
 const FIELDS=[['Name','name'],['Phone','phone'],['Company','company'],['Vehicle','vehicle'],['Whom to see','host'],['Reason for visit','purpose'],['Where he/she wants to work','area'],['Items brought in','items']];
-function rows(v){return [['Visitor ID',v.id],...FIELDS.map(f=>[f[0],v[f[1]]||'']),['Entry',fmt(v.entry)],['Exit',v.exit?fmt(v.exit):'Still inside'],['Time spent',dur(v)]]}
+function rows(v){return [['Visitor ID',v.id],...FIELDS.map(f=>[f[0],v[f[1]]||'']),['Entry',fmt(v.entry)],['Exit',v.exit?fmt(v.exit):'Still inside'],['Left with (items taken out)',v.exit?(v.itemsOut||'Nothing'):''],['Exit checked by (security)',v.officer||''],['Exit remarks',v.note||''],['Exit signature',v.sig?'Captured':(v.exit?'None':'')],['Exit photo',v.photo?'Captured':(v.exit?'None':'')],['Time spent',dur(v)]]}
 function text(v){return '*FACTORY VISITOR RECORD*\n'+rows(v).map(r=>r.join(': ')).join('\n')}
 // ---------- files ----------
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
@@ -59,7 +63,7 @@ function zip(files){const e=new TextEncoder(),parts=[],cen=[];let off=0;
  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);
  return new Blob([...parts,...cen,z.buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
 function xlsx(list){
- const head=['Visitor ID',...FIELDS.map(f=>f[0]),'Entry','Exit','Time spent'];
+ const head=rows({entry:new Date().toISOString()}).map(r=>r[0]);
  const data=[head,...list.map(v=>rows(v).map(r=>r[1]))];
  const col=i=>String.fromCharCode(65+i);
  const sx=data.map((r,i)=>'<row r="'+(i+1)+'">'+r.map((c,j)=>'<c r="'+col(j)+(i+1)+'" t="inlineStr"'+(i==0?' s="1"':'')+'><is><t>'+esc(c)+'</t></is></c>').join('')+'</row>').join('');
@@ -70,7 +74,7 @@ function xlsx(list){
  ['xl/workbook.xml',X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Visitors" sheetId="1" r:id="rId1"/></sheets></workbook>'],
  ['xl/_rels/workbook.xml.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
  ['xl/styles.xml',X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>'],
- ['xl/worksheets/sheet1.xml',X+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="12" width="22" customWidth="1"/></cols><sheetData>'+sx+'</sheetData></worksheet>']])}
+ ['xl/worksheets/sheet1.xml',X+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="20" width="22" customWidth="1"/></cols><sheetData>'+sx+'</sheetData></worksheet>']])}
 // minimal text PDF
 function pdf(title,blocks){
  const L=[];const wrap=(s,n=90)=>{s=String(s).replace(/[^\x20-\x7E]/g,'?');const o=[];while(s.length>n){let i=s.lastIndexOf(' ',n);if(i<1)i=n;o.push(s.slice(0,i));s=s.slice(i).trim()}o.push(s);return o};
@@ -94,7 +98,28 @@ function pdf(title,blocks){
 const get=id=>V.find(v=>v.id===id);
 const fn=(v,ext)=>'visitor_'+(v.name||'x').replace(/\W+/g,'_')+'_'+v.entry.slice(0,10)+'.'+ext;
 window.A={
- out(id){const v=get(id);if(confirm('Sign out '+v.name+' now?')){v.exit=new Date().toISOString();save();draw()}},
+ out(id){const v=get(id);const d=document.createElement('div');d.className='mod';d.innerHTML='<div><b>Sign out: '+esc(v.name)+'</b><div class="kv">Came in with: <b>'+esc(v.items||'nothing declared')+'</b></div>'
+  +'<label>What is he/she leaving with? *</label><textarea id="xo" rows="2" placeholder="Write \'Nothing\' if empty-handed"></textarea>'
+  +'<label>Checked by (security officer) *</label><input id="xb">'
+  +'<label>Remarks</label><input id="xn">'
+  +'<label>Visitor signature</label><canvas id="sg" width="600" height="280"></canvas>'
+  +'<label>Photo evidence (visitor / items leaving)</label><input id="xp" type="file" accept="image/*" capture="environment"><div class="th" id="th"></div>'
+  +'<div class="acts"><button class="b g" id="ok">Confirm departure</button><button class="b o" id="cl">Clear signature</button><button class="b r" id="no">Cancel</button></div></div>';
+  document.body.appendChild(d);
+  const c=d.querySelector('#sg'),x=c.getContext('2d');x.lineWidth=4;x.lineCap='round';let dr=false,dn=false;
+  const pt=e=>{const r=c.getBoundingClientRect();return[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
+  c.onpointerdown=e=>{dr=true;dn=true;const[a,b]=pt(e);x.beginPath();x.moveTo(a,b);c.setPointerCapture(e.pointerId)};
+  c.onpointermove=e=>{if(!dr)return;const[a,b]=pt(e);x.lineTo(a,b);x.stroke()};c.onpointerup=()=>dr=false;
+  d.querySelector('#cl').onclick=()=>{x.clearRect(0,0,c.width,c.height);dn=false};
+  d.querySelector('#no').onclick=()=>d.remove();
+  let photo='';d.querySelector('#xp').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const k=Math.min(1,800/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=im.width*k;cv.height=im.height*k;cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);photo=cv.toDataURL('image/jpeg',.6);d.querySelector('#th').innerHTML='<img src="'+photo+'">'};im.src=URL.createObjectURL(f)};
+  d.querySelector('#ok').onclick=()=>{const io=d.querySelector('#xo').value.trim(),ob=d.querySelector('#xb').value.trim();if(!io||!ob)return alert('Fill in what the visitor is leaving with and who checked.');
+   v.exit=new Date().toISOString();v.itemsOut=io;v.officer=ob;v.note=d.querySelector('#xn').value.trim();v.sig=dn?c.toDataURL('image/png'):'';v.photo=photo;save();d.remove();draw()}},
+ async ev(id,s){const v=get(id),fs=[];const mk=(u,n)=>{const b=atob(u.split(',')[1]),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return new File([a],n,{type:u.slice(5,u.indexOf(';'))})};
+  if(v.photo)fs.push(mk(v.photo,'exit_photo_'+v.id+'.jpg'));if(v.sig)fs.push(mk(v.sig,'exit_signature_'+v.id+'.png'));
+  if(!fs.length)return alert('No signature or photo was captured');
+  if(s&&navigator.canShare&&navigator.canShare({files:fs})){try{await navigator.share({files:fs,text:text(v)});return}catch(e){if(e.name==='AbortError')return}}
+  fs.forEach(f=>dl(f,f.name))},
  del(id){if(confirm('Delete this record permanently?')){V=V.filter(v=>v.id!==id);save();draw()}},
  wa(id){const v=get(id);open('https://wa.me/?text='+encodeURIComponent(text(v)),'_blank')},
  xl(id,s){const v=get(id);out(xlsx([v]),fn(v,'xlsx'),text(v),s)},
@@ -109,7 +134,8 @@ function card(v){return '<div class="card"><div style="display:flex;justify-cont
  +'<div class="kv">Area: <b>'+esc(v.area||'—')+'</b> · Vehicle: <b>'+esc(v.vehicle||'none')+'</b></div>'
  +'<div class="kv">Items: <b>'+esc(v.items||'none')+'</b>'+(v.company?' · '+esc(v.company):'')+(v.phone?' · '+esc(v.phone):'')+'</div>'
  +'<div class="kv">In: <b>'+fmt(v.entry)+'</b> · Out: <b>'+(v.exit?fmt(v.exit):'—')+'</b> · '+dur(v)+'</div>'
- +'<div class="acts">'+(v.exit?'':'<button class="b g" onclick="A.out(\''+v.id+'\')">Sign out</button>')
+ +(v.exit?'<div class="kv" style="border-top:1px solid var(--bd);padding-top:6px">✅ Left with: <b>'+esc(v.itemsOut||'Nothing')+'</b> · Checked by: <b>'+esc(v.officer||'—')+'</b>'+(v.note?' · '+esc(v.note):'')+'</div>'+((v.sig||v.photo)?'<div class="th">'+(v.photo?'<img src="'+v.photo+'">':'')+(v.sig?'<img src="'+v.sig+'">':'')+'</div>':''):'')
+ +'<div class="acts">'+(v.exit?'<button class="b" onclick="A.ev(\''+v.id+'\',true)">Share exit evidence</button>':'<button class="b g" onclick="A.out(\''+v.id+'\')">Sign out</button>')
  +'<button class="b w" onclick="A.wa(\''+v.id+'\')">WhatsApp</button><button class="b" onclick="A.xl(\''+v.id+'\',true)">Share Excel</button><button class="b" onclick="A.pf(\''+v.id+'\',true)">Share PDF</button>'
  +'<button class="b o" onclick="A.xl(\''+v.id+'\')">⬇ Excel</button><button class="b o" onclick="A.pf(\''+v.id+'\')">⬇ PDF</button><button class="b r" onclick="A.del(\''+v.id+'\')">Delete</button></div></div>'}
 function draw(){
