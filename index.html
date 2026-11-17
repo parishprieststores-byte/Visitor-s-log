@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Factory Visitor Log</title>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--tx:#0f172a;--mu:#64748b;--ac:#0284c7;--ok:#16a34a;--bad:#dc2626;--bd:#e2e8f0}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1220;--card:#162033;--tx:#e2e8f0;--mu:#94a3b8;--bd:#263449}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:env(safe-area-inset-bottom)}
+header{background:#0f172a;color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:18px}header small{color:#94a3b8}
+nav{display:flex;gap:6px;margin-top:10px}nav button{flex:1;padding:9px;border:0;border-radius:8px;background:#1e293b;color:#cbd5e1;font-weight:600}
+nav button.on{background:var(--ac);color:#fff}
+main{max-width:760px;margin:auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+label{display:block;font-size:12px;color:var(--mu);margin:8px 0 3px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font-size:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button.b{padding:9px 12px;border:0;border-radius:8px;background:var(--ac);color:#fff;font-weight:600;font-size:14px}
+button.g{background:var(--ok)}button.r{background:var(--bad)}button.w{background:#25d366}button.o{background:#64748b}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#166534;font-weight:700}.tag.out{background:#e2e8f0;color:#475569}
+.kv{font-size:13px;color:var(--mu);margin-top:3px}.kv b{color:var(--tx)}
+.top{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.top input{flex:1;min-width:140px}
+.big{width:100%;padding:14px;font-size:16px}
+.empty{text-align:center;color:var(--mu);padding:30px}
+#st{font-size:11px}
+</style></head><body>
+<header><h1>🏭 Factory Visitor Log</h1><small><span id="st"></span> · <span id="cnt"></span></small>
+<nav><button data-t="in" class="on">Inside</button><button data-t="all">All</button><button data-t="add">+ New</button></nav></header>
+<main id="m"></main>
+<script>
+const $=s=>document.querySelector(s);
+let V=[];try{V=JSON.parse(localStorage.getItem('visitors')||'[]')}catch(e){}
+let tab='in',q='',day='';
+const save=()=>{try{localStorage.setItem('visitors',JSON.stringify(V))}catch(e){alert('Storage full or blocked')}};
+const fmt=d=>d?new Date(d).toLocaleString([], {dateStyle:'medium',timeStyle:'short'}):'—';
+const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dur=v=>{const e=new Date(v.exit||Date.now())-new Date(v.entry),m=Math.round(e/60000);return m<60?m+' min':Math.floor(m/60)+' h '+m%60+' min'};
+const FIELDS=[['Name','name'],['Phone','phone'],['Company','company'],['Vehicle','vehicle'],['Whom to see','host'],['Reason for visit','purpose'],['Where he/she wants to work','area'],['Items brought in','items']];
+function rows(v){return [['Visitor ID',v.id],...FIELDS.map(f=>[f[0],v[f[1]]||'']),['Entry',fmt(v.entry)],['Exit',v.exit?fmt(v.exit):'Still inside'],['Time spent',dur(v)]]}
+function text(v){return '*FACTORY VISITOR RECORD*\n'+rows(v).map(r=>r.join(': ')).join('\n')}
+// ---------- files ----------
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+async function out(blob,name,txt,share){
+ if(share&&navigator.canShare){const f=new File([blob],name,{type:blob.type});if(navigator.canShare({files:[f]})){try{await navigator.share({files:[f],text:txt});return}catch(e){if(e.name==='AbortError')return}}}
+ dl(blob,name)}
+// CRC + minimal zip (store) for xlsx
+const CT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=b=>{let c=-1;for(const x of b)c=CT[(c^x)&255]^(c>>>8);return(c^-1)>>>0};
+function zip(files){const e=new TextEncoder(),parts=[],cen=[];let off=0;
+ for(const[n,d]of files){const nb=e.encode(n),db=e.encode(d),c=crc(db);
+  const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint32(14,c,true);h.setUint32(18,db.length,true);h.setUint32(22,db.length,true);h.setUint16(26,nb.length,true);
+  parts.push(h.buffer,nb,db);
+  const g=new DataView(new ArrayBuffer(46));g.setUint32(0,0x02014b50,true);g.setUint16(4,20,true);g.setUint16(6,20,true);g.setUint32(16,c,true);g.setUint32(20,db.length,true);g.setUint32(24,db.length,true);g.setUint16(28,nb.length,true);g.setUint32(42,off,true);
+  cen.push(g.buffer,nb);off+=30+nb.length+db.length}
+ let cs=0;cen.forEach(x=>cs+=x.byteLength);
+ const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);
+ return new Blob([...parts,...cen,z.buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+function xlsx(list){
+ const head=['Visitor ID',...FIELDS.map(f=>f[0]),'Entry','Exit','Time spent'];
+ const data=[head,...list.map(v=>rows(v).map(r=>r[1]))];
+ const col=i=>String.fromCharCode(65+i);
+ const sx=data.map((r,i)=>'<row r="'+(i+1)+'">'+r.map((c,j)=>'<c r="'+col(j)+(i+1)+'" t="inlineStr"'+(i==0?' s="1"':'')+'><is><t>'+esc(c)+'</t></is></c>').join('')+'</row>').join('');
+ const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+ return zip([
+ ['[Content_Types].xml',X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+ ['_rels/.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+ ['xl/workbook.xml',X+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Visitors" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+ ['xl/_rels/workbook.xml.rels',X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+ ['xl/styles.xml',X+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>'],
+ ['xl/worksheets/sheet1.xml',X+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="12" width="22" customWidth="1"/></cols><sheetData>'+sx+'</sheetData></worksheet>']])}
+// minimal text PDF
+function pdf(title,blocks){
+ const L=[];const wrap=(s,n=90)=>{s=String(s).replace(/[^\x20-\x7E]/g,'?');const o=[];while(s.length>n){let i=s.lastIndexOf(' ',n);if(i<1)i=n;o.push(s.slice(0,i));s=s.slice(i).trim()}o.push(s);return o};
+ L.push(['B',title,16]);L.push(['T','Generated: '+fmt(new Date()),9]);L.push(['T','',10]);
+ blocks.forEach(b=>{b.forEach(r=>wrap(r[0]+': '+r[1]).forEach((t,i)=>L.push(['T',(i?'    ':'')+t,11])));L.push(['T','----------------------------------------------------------------',10])});
+ const pages=[];let cur=[],y=800;
+ L.forEach(l=>{if(y<50){pages.push(cur);cur=[];y=800}cur.push([l,y]);y-=l[2]+5});pages.push(cur);
+ const esc2=s=>s.replace(/[\\()]/g,'\\$&');
+ const objs=[];objs[1]='<</Type/Catalog/Pages 2 0 R>>';
+ const kids=pages.map((_,i)=>(5+i*2)+' 0 R').join(' ');
+ objs[2]='<</Type/Pages/Kids['+kids+']/Count '+pages.length+'>>';
+ objs[3]='<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>';objs[4]='<</Type/Font/Subtype/Type1/BaseFont/Helvetica-Bold>>';
+ pages.forEach((p,i)=>{const s=p.map(([l,yy])=>'BT /'+(l[0]=='B'?'F2':'F1')+' '+l[2]+' Tf 40 '+yy+' Td ('+esc2(l[1])+') Tj ET').join('\n');
+  objs[5+i*2]='<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 3 0 R/F2 4 0 R>>>>/Contents '+(6+i*2)+' 0 R>>';
+  objs[6+i*2]='<</Length '+s.length+'>>\nstream\n'+s+'\nendstream'});
+ let o='%PDF-1.4\n';const off=[];
+ for(let i=1;i<objs.length;i++){off[i]=o.length;o+=i+' 0 obj\n'+objs[i]+'\nendobj\n'}
+ const x=o.length;o+='xref\n0 '+objs.length+'\n0000000000 65535 f \n'+off.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<</Size '+objs.length+'/Root 1 0 R>>\nstartxref\n'+x+'\n%%EOF';
+ return new Blob([o],{type:'application/pdf'})}
+// ---------- actions ----------
+const get=id=>V.find(v=>v.id===id);
+const fn=(v,ext)=>'visitor_'+(v.name||'x').replace(/\W+/g,'_')+'_'+v.entry.slice(0,10)+'.'+ext;
+window.A={
+ out(id){const v=get(id);if(confirm('Sign out '+v.name+' now?')){v.exit=new Date().toISOString();save();draw()}},
+ del(id){if(confirm('Delete this record permanently?')){V=V.filter(v=>v.id!==id);save();draw()}},
+ wa(id){const v=get(id);open('https://wa.me/?text='+encodeURIComponent(text(v)),'_blank')},
+ xl(id,s){const v=get(id);out(xlsx([v]),fn(v,'xlsx'),text(v),s)},
+ pf(id,s){const v=get(id);out(pdf('Factory Visitor Record',[rows(v)]),fn(v,'pdf'),text(v),s)},
+ xlAll(){const l=filtered(true);if(!l.length)return alert('No records');out(xlsx(l),'visitors_'+(day||'all')+'.xlsx','',false)},
+ pfAll(){const l=filtered(true);if(!l.length)return alert('No records');out(pdf('Factory Visitor Log'+(day?' - '+day:''),l.map(rows)),'visitors_'+(day||'all')+'.pdf','',false)},
+ waAll(){const l=filtered(true);open('https://wa.me/?text='+encodeURIComponent('*VISITOR LOG '+(day||'')+'*\n\n'+l.map(v=>'• '+v.name+' | '+v.host+' | In: '+fmt(v.entry)+' | Out: '+(v.exit?fmt(v.exit):'inside')).join('\n')),'_blank')}
+};
+function filtered(all){return V.filter(v=>(all||tab==='all'||!v.exit)&&(!day||v.entry.slice(0,10)===day)&&(!q||JSON.stringify(v).toLowerCase().includes(q))).sort((a,b)=>b.entry.localeCompare(a.entry))}
+function card(v){return '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(v.name)+'</b><span class="tag '+(v.exit?'out':'')+'">'+(v.exit?'OUT':'INSIDE')+'</span></div>'
+ +'<div class="kv">To see <b>'+esc(v.host)+'</b> · '+esc(v.purpose)+'</div>'
+ +'<div class="kv">Area: <b>'+esc(v.area||'—')+'</b> · Vehicle: <b>'+esc(v.vehicle||'none')+'</b></div>'
+ +'<div class="kv">Items: <b>'+esc(v.items||'none')+'</b>'+(v.company?' · '+esc(v.company):'')+(v.phone?' · '+esc(v.phone):'')+'</div>'
+ +'<div class="kv">In: <b>'+fmt(v.entry)+'</b> · Out: <b>'+(v.exit?fmt(v.exit):'—')+'</b> · '+dur(v)+'</div>'
+ +'<div class="acts">'+(v.exit?'':'<button class="b g" onclick="A.out(\''+v.id+'\')">Sign out</button>')
+ +'<button class="b w" onclick="A.wa(\''+v.id+'\')">WhatsApp</button><button class="b" onclick="A.xl(\''+v.id+'\',true)">Share Excel</button><button class="b" onclick="A.pf(\''+v.id+'\',true)">Share PDF</button>'
+ +'<button class="b o" onclick="A.xl(\''+v.id+'\')">⬇ Excel</button><button class="b o" onclick="A.pf(\''+v.id+'\')">⬇ PDF</button><button class="b r" onclick="A.del(\''+v.id+'\')">Delete</button></div></div>'}
+function draw(){
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+ $('#cnt').textContent=V.filter(v=>!v.exit).length+' inside · '+V.length+' total';
+ const m=$('#m');
+ if(tab==='add'){m.innerHTML='<div class="card"><form id="f">'
+  +'<label>Visitor name *</label><input name="name" required>'
+  +'<div class="row"><div><label>Phone</label><input name="phone" type="tel"></div><div><label>Company</label><input name="company"></div></div>'
+  +'<div class="row"><div><label>Vehicle (type / plate)</label><input name="vehicle"></div><div><label>Whom to see *</label><input name="host" required></div></div>'
+  +'<label>Reason for visit *</label><input name="purpose" required>'
+  +'<label>Where he/she wants to work</label><input name="area" placeholder="e.g. Production hall, Boiler room">'
+  +'<label>Items brought in</label><textarea name="items" rows="2" placeholder="Laptop, tools, goods…"></textarea>'
+  +'<label>Entry date & time</label><input name="entry" type="datetime-local">'
+  +'<div class="acts"><button class="b g big">Sign visitor IN</button></div></form></div>';
+  const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());$('[name=entry]').value=n.toISOString().slice(0,16);
+  $('#f').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));d.id='V'+Date.now().toString(36).toUpperCase();d.entry=d.entry?new Date(d.entry).toISOString():new Date().toISOString();d.exit=null;V.push(d);save();tab='in';draw()};
+  return}
+ const l=filtered();
+ m.innerHTML='<div class="top"><input id="q" placeholder="Search…" value="'+esc(q)+'"><input id="d" type="date" value="'+day+'" style="max-width:160px"></div>'
+  +'<div class="top"><button class="b" onclick="A.xlAll()">⬇ Excel (all shown)</button><button class="b" onclick="A.pfAll()">⬇ PDF (all shown)</button><button class="b w" onclick="A.waAll()">WhatsApp list</button></div>'
+  +(l.length?l.map(card).join(''):'<div class="empty">No visitors here yet.</div>');
+ $('#q').oninput=e=>{q=e.target.value.toLowerCase();const p=e.target.selectionStart;draw();$('#q').focus();$('#q').setSelectionRange(p,p)};
+ $('#d').onchange=e=>{day=e.target.value;draw()}}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;draw()});
+const net=()=>{$('#st').textContent=navigator.onLine?'🟢 Online':'🟠 Offline (saved on device)'};
+addEventListener('online',net);addEventListener('offline',net);net();draw();
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script></body></html>
