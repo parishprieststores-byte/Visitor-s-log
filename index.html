@@ -161,7 +161,7 @@ function draw(){
  $('#q').oninput=e=>{q=e.target.value.toLowerCase();const p=e.target.selectionStart;draw();$('#q').focus();$('#q').setSelectionRange(p,p)};
  $('#d').onchange=e=>{day=e.target.value;draw()}}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;draw()});
-const net=()=>{$('#st').textContent=navigator.onLine?'🟢 Online':'🟠 Offline (saved on device)'};
+let rdy=false;const net=()=>{$('#st').textContent=(navigator.onLine?'🟢 Online':'🟠 Offline')+(rdy?' · ✔ offline-ready':location.protocol==='file:'?' · ⚠ open from your GitHub link to work offline':' · preparing offline mode…')};
 addEventListener('online',net);addEventListener('offline',net);net();draw();
-if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(()=>caches.has('visitorlog-v3')).then(h=>{rdy=h;net()}).catch(()=>{}));
 </script></body></html>
